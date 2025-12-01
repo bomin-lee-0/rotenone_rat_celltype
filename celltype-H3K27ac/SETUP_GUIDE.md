@@ -1,44 +1,44 @@
 # Rat Midbrain ChIP-seq Analysis - Local Setup Guide
 
-로컬 환경에서 ChIP-seq 분석 파이프라인을 실행하기 위한 가이드입니다.
+This guide explains how to run the ChIP-seq analysis pipeline in a local environment.
 
 ## 📋 Table of Contents
-1. [환경 설정](#환경-설정)
-2. [데이터 준비](#데이터-준비)
-3. [파이프라인 실행](#파이프라인-실행)
-4. [주요 스크립트 설명](#주요-스크립트-설명)
-5. [문제 해결](#문제-해결)
+1. [Environment Setup](#environment-setup)
+2. [Data Preparation](#data-preparation)
+3. [Pipeline Execution](#pipeline-execution)
+4. [Script Descriptions](#script-descriptions)
+5. [Troubleshooting](#troubleshooting)
 
 ---
 
-## 🔧 환경 설정
+## 🔧 Environment Setup
 
-### 1. Conda 환경 생성
+### 1. Create Conda Environment
 
 ```bash
-# 프로젝트 디렉토리로 이동
+# Navigate to project directory
 cd projects/rat-midbrain
 
-# Conda 환경 생성 (처음 한 번만 실행)
+# Create Conda environment (run only once)
 conda env create -f environment.yml
 
-# 환경 활성화
+# Activate environment
 conda activate ratlas_env
 ```
 
-### 2. 참조 게놈 다운로드 (필요시)
+### 2. Download Reference Genome (if needed)
 
-#### Rat genome (rn7) 다운로드:
+#### Download Rat genome (rn7):
 ```bash
-# 게놈 FASTA 다운로드
+# Download genome FASTA
 wget https://hgdownload.soe.ucsc.edu/goldenPath/rn7/bigZips/rn7.fa.gz
 gunzip rn7.fa.gz
 
-# Bowtie2 인덱스 생성 (alignment 필요시)
+# Build Bowtie2 index (if alignment is needed)
 bowtie2-build rn7.fa rn7_index/rn7
 ```
 
-#### config.yaml 수정:
+#### Edit config.yaml:
 ```yaml
 genome:
   fasta: "/path/to/rn7.fa"
@@ -47,11 +47,11 @@ genome:
 
 ---
 
-## 📁 데이터 준비
+## 📁 Data Preparation
 
-### 1. FASTQ 파일 배치
+### 1. Place FASTQ Files
 
-FASTQ 파일을 `0_data/` 폴더에 배치합니다:
+Place FASTQ files in the `0_data/` folder:
 
 ```bash
 projects/rat-midbrain/0_data/
@@ -63,142 +63,142 @@ projects/rat-midbrain/0_data/
 └── IGF131377_R2.fastq.gz
 ```
 
-### 2. 샘플 정보
+### 2. Sample Information
 
-**Cell type별 샘플 구성:**
-- **NeuN** (뉴런): IGF131357, IGF131358, IGF131359
+**Sample composition by cell type:**
+- **NeuN** (Neurons): IGF131357, IGF131358, IGF131359
   - Input: IGF131373
-- **Nurr** (도파민성 뉴런): IGF131366, IGF131367
+- **Nurr** (Dopaminergic neurons): IGF131366, IGF131367
   - Input: IGF131376
-- **Olig** (올리고덴드로사이트): IGF131360, IGF131361, IGF131362
+- **Olig** (Oligodendrocytes): IGF131360, IGF131361, IGF131362
   - Input: IGF131374
-- **Neg** (음성 대조군): IGF131369, IGF131370, IGF131371
+- **Neg** (Negative control): IGF131369, IGF131370, IGF131371
   - Input: IGF131377
 
 ---
 
-## 🚀 파이프라인 실행
+## 🚀 Pipeline Execution
 
-### 방법 1: 개별 스크립트 실행 (추천)
+### Method 1: Run Individual Scripts (Recommended)
 
-각 단계를 순차적으로 실행:
+Run each step sequentially:
 
 ```bash
-# 환경 활성화
+# Activate environment
 conda activate ratlas_env
 
-# Step 1: Preprocessing (FASTQ 파일 필요)
+# Step 1: Preprocessing (requires FASTQ files)
 bash scripts/01_preprocessing_qc_local.sh
 
-# Step 2: Alignment (참조 게놈 필요)
+# Step 2: Alignment (requires reference genome)
 bash scripts/02_alignment.sh
 
-# Step 3: Peak Calling (BAM 파일 필요)
+# Step 3: Peak Calling (requires BAM files)
 bash scripts/03_peak_calling_local.sh
 
-# Step 4: QC Metrics (FRiP 계산)
+# Step 4: QC Metrics (FRiP calculation)
 bash scripts/04_qc_metrics_local.sh
 
 # Step 5: Peak Processing
 bash scripts/05_peak_processing.sh
 
-# Step 6: Annotation (R 필요)
+# Step 6: Annotation (requires R)
 Rscript scripts/06_annotation.R
 
-# Step 7: Enrichment Analysis (R 필요)
+# Step 7: Enrichment Analysis (requires R)
 Rscript scripts/07_enrichment.R
 
 # Step 8: Motif Analysis
 bash scripts/08_motif_analysis.sh
 ```
 
-### 방법 2: Python 메인 파이프라인 실행
+### Method 2: Run Python Main Pipeline
 
 ```bash
-# 전체 파이프라인 실행
+# Run full pipeline
 python main.py
 
-# 특정 단계부터 실행
+# Start from specific step
 python main.py --start-from peak_calling
 
-# 특정 단계까지 실행
+# Stop at specific step
 python main.py --stop-at qc_metrics
 
-# 특정 단계 건너뛰기
+# Skip specific steps
 python main.py --skip preprocessing alignment
 
-# 사용 가능한 단계 확인
+# List available steps
 python main.py --list-steps
 ```
 
 ---
 
-## 📝 주요 스크립트 설명
+## 📝 Script Descriptions
 
-### 로컬 버전 스크립트 (SLURM 불필요)
+### Local Version Scripts (No SLURM Required)
 
 #### `01_preprocessing_qc_local.sh`
-- **기능**: FASTQ QC 및 어댑터 트리밍
-- **입력**: `0_data/*_R1.fastq.gz`, `*_R2.fastq.gz`
-- **출력**: `01_preprocessing_qc/trimmed_fastq/`
-- **원본과의 차이**:
+- **Function**: FASTQ QC and adapter trimming
+- **Input**: `0_data/*_R1.fastq.gz`, `*_R2.fastq.gz`
+- **Output**: `01_preprocessing_qc/trimmed_fastq/`
+- **Differences from original**:
   - SLURM array job → for loop
-  - `module load` 제거 (conda 사용)
-  - 로컬 경로 사용
+  - Removed `module load` (uses conda)
+  - Uses local paths
 
 #### `03_peak_calling_local.sh`
-- **기능**: Cell type별 peak calling (replicates 통합)
-- **입력**: `02_alignment/filtered_bam/*.bam`
-- **출력**: `03_peak_calling/macs2_output/`
-- **원본과의 차이**:
-  - 경로만 로컬로 수정
-  - MACS2 파라미터 동일 유지
+- **Function**: Peak calling by cell type (merged replicates)
+- **Input**: `02_alignment/filtered_bam/*.bam`
+- **Output**: `03_peak_calling/macs2_output/`
+- **Differences from original**:
+  - Only paths modified to local
+  - MACS2 parameters unchanged
 
 #### `04_qc_metrics_local.sh`
-- **기능**: FRiP score 계산 (fragment-level)
-- **입력**: BAM 파일 + Peak 파일
-- **출력**: `04_qc_metrics/frip_scores.csv`
-- **원본과의 차이**:
-  - 경로만 로컬로 수정
-  - 로직 완전 동일
+- **Function**: FRiP score calculation (fragment-level)
+- **Input**: BAM files + Peak files
+- **Output**: `04_qc_metrics/frip_scores.csv`
+- **Differences from original**:
+  - Only paths modified to local
+  - Logic completely identical
 
 ---
 
-## ⚠️ 문제 해결
+## ⚠️ Troubleshooting
 
-### 1. "command not found" 에러
+### 1. "command not found" Error
 
 ```bash
-# Conda 환경이 활성화되었는지 확인
+# Check if Conda environment is activated
 conda activate ratlas_env
 
-# 특정 도구 설치 확인
+# Verify specific tool installation
 which trim_galore
 which macs2
 which bedtools
 ```
 
-### 2. 메모리 부족
+### 2. Out of Memory
 
 ```bash
-# MACS2에서 메모리 에러 발생시, 샘플을 나눠서 실행
-# 또는 --buffer-size 옵션 조정
+# If memory error occurs in MACS2, run samples separately
+# Or adjust --buffer-size option
 ```
 
-### 3. Bowtie2 인덱스 에러
+### 3. Bowtie2 Index Error
 
 ```bash
-# BOWTIE2_INDEX 환경 변수 설정
+# Set BOWTIE2_INDEX environment variable
 export BOWTIE2_INDEX=/path/to/rn7_index/rn7
 
-# 또는 스크립트 내에서 직접 수정
-# scripts/02_alignment.sh 파일의 BOWTIE2_INDEX 변수 수정
+# Or modify directly in script
+# Edit BOWTIE2_INDEX variable in scripts/02_alignment.sh
 ```
 
-### 4. R 패키지 설치 문제
+### 4. R Package Installation Issues
 
 ```R
-# R 콘솔에서 수동 설치
+# Manual installation in R console
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
 
@@ -210,26 +210,26 @@ BiocManager::install(c(
 ))
 ```
 
-### 5. HOMER genome 설치
+### 5. HOMER Genome Installation
 
 ```bash
-# HOMER genome 설치 (motif analysis 필요시)
+# Install HOMER genome (required for motif analysis)
 perl $(which configureHomer.pl) -install rn7
 
-# 또는 최신 버전 확인
+# Or check latest version
 homer2 listGenomes
 ```
 
 ---
 
-## 📊 결과 확인
+## 📊 Results
 
-### 주요 출력 파일:
+### Main Output Files:
 
 ```
 01_preprocessing_qc/
-├── multiqc_report.html          ← QC 전체 요약
-└── trimmed_fastq/               ← 트리밍된 FASTQ
+├── multiqc_report.html          ← Overall QC summary
+└── trimmed_fastq/               ← Trimmed FASTQ files
 
 03_peak_calling/
 └── macs2_output/
@@ -239,33 +239,33 @@ homer2 listGenomes
     └── Neg/Neg_all_peaks.narrowPeak
 
 04_qc_metrics/
-├── frip_scores.csv              ← FRiP score 결과
-└── qc_summary.txt               ← QC 요약
+├── frip_scores.csv              ← FRiP score results
+└── qc_summary.txt               ← QC summary
 
 06_annotation/
 ├── annotation_summary.csv       ← Peak annotation
-└── plots/                       ← 시각화
+└── plots/                       ← Visualizations
 
 07_enrichment/
-├── results/                     ← GO/KEGG 결과
+├── results/                     ← GO/KEGG results
 └── figures/                     ← Enrichment plots
 
 08_motif_analysis/
-└── motif_results/               ← HOMER motif 결과
-    └── */homerResults.html      ← 결과 HTML
+└── motif_results/               ← HOMER motif results
+    └── */homerResults.html      ← Results HTML
 ```
 
 ---
 
-## 🎯 빠른 시작 (BAM 파일이 이미 있는 경우)
+## 🎯 Quick Start (If You Already Have BAM Files)
 
-이미 alignment까지 완료된 BAM 파일이 있다면:
+If you already have BAM files from completed alignment:
 
 ```bash
-# 1. BAM 파일을 올바른 위치에 배치
+# 1. Place BAM files in correct location
 cp /path/to/bams/*.bam projects/rat-midbrain/02_alignment/filtered_bam/
 
-# 2. Peak calling부터 시작
+# 2. Start from peak calling
 conda activate ratlas_env
 bash scripts/03_peak_calling_local.sh
 bash scripts/04_qc_metrics_local.sh
@@ -277,15 +277,15 @@ bash scripts/08_motif_analysis.sh
 
 ---
 
-## 📧 문의
+## 📧 Contact
 
-문제가 발생하거나 질문이 있으면:
-- GitHub Issues 생성
+If you encounter problems or have questions:
+- Create GitHub Issues
 - Email: bomin.lee@kcl.ac.uk
 
 ---
 
-## 📚 참고 자료
+## 📚 References
 
 - [MACS2 Documentation](https://github.com/macs3-project/MACS)
 - [ChIPseeker Documentation](https://bioconductor.org/packages/ChIPseeker)

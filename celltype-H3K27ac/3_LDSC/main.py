@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-파킨슨병 GWAS - 세포타입별 Enhancer Enrichment 분석
+Parkinson's Disease GWAS - Cell Type-Specific Enhancer Enrichment Analysis
 Main execution script
 """
 
@@ -16,64 +16,64 @@ sys.path.append(str(Path(__file__).parent / "1.Scripts" / "Utils"))
 
 def main():
     parser = argparse.ArgumentParser(
-        description="파킨슨병 GWAS 세포타입별 Enhancer Enrichment 분석",
+        description="Parkinson's Disease GWAS Cell Type-Specific Enhancer Enrichment Analysis",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-사용 예시:
-  # 1. 좌표 변환
+Usage examples:
+  # 1. Coordinate conversion
   python main.py --step coordinate
-  
-  # 2. LDSC 분석
+
+  # 2. LDSC analysis
   python main.py --step ldsc
-  
-  # 3. 시각화
+
+  # 3. Visualization
   python main.py --step visualize
-  
-  # 전체 파이프라인 실행
+
+  # Run full pipeline
   python main.py --all
         """
     )
-    
+
     parser.add_argument(
-        '--step', 
+        '--step',
         choices=['coordinate', 'ldsc', 'visualize'],
-        help='실행할 단계 선택'
+        help='Select step to run'
     )
     parser.add_argument(
-        '--all', 
+        '--all',
         action='store_true',
-        help='전체 파이프라인 실행'
+        help='Run full pipeline'
     )
-    
+
     args = parser.parse_args()
-    
+
     if args.all:
         print("=" * 60)
-        print("파킨슨병 GWAS 세포타입별 Enhancer Enrichment 분석")
-        print("전체 파이프라인 실행")
+        print("Parkinson's Disease GWAS Cell Type-Specific Enhancer Enrichment Analysis")
+        print("Running full pipeline")
         print("=" * 60)
 
         # Step 1: Coordinate conversion
-        print("\n[1/3] 좌표계 변환...")
+        print("\n[1/3] Coordinate conversion...")
         try:
             from setup_liftover import convert_all_enhancer_files
             convert_all_enhancer_files()
-            print("✅ 좌표계 변환 완료")
+            print("✅ Coordinate conversion completed")
         except Exception as e:
-            print(f"⚠️  좌표계 변환 건너뜀 (이미 완료되었거나 오류 발생): {e}")
+            print(f"⚠️  Coordinate conversion skipped (already completed or error occurred): {e}")
 
         # Step 2: LDSC analysis (optional - may fail if LDSC not configured)
-        print("\n[2/3] LDSC 분석...")
+        print("\n[2/3] LDSC analysis...")
         try:
             from ldsc_analysis_system import main as ldsc_main
             ldsc_main()
-            print("✅ LDSC 분석 완료")
+            print("✅ LDSC analysis completed")
         except Exception as e:
-            print(f"⚠️  LDSC 분석 건너뜀 (LDSC 설정 필요 또는 오류): {e}")
-            print("   (시각화는 계속 진행됩니다)")
+            print(f"⚠️  LDSC analysis skipped (LDSC setup required or error): {e}")
+            print("   (Visualization will continue)")
 
         # Step 3: Visualization
-        print("\n[3/3] 시각화...")
+        print("\n[3/3] Visualization...")
         try:
             import sys
             sys.path.insert(0, str(Path(__file__).parent / "1.Scripts" / "Visualization"))
@@ -90,39 +90,39 @@ def main():
             celltype_manhattan_plot.create_comparison_manhattan(
                 celltype_manhattan_plot.gwas_data, celltype_manhattan_plot.annotations
             )
-            print("✅ 시각화 완료")
+            print("✅ Visualization completed")
         except Exception as e:
-            print(f"❌ 시각화 실패: {e}")
+            print(f"❌ Visualization failed: {e}")
             import traceback
             traceback.print_exc()
 
-        print("\n✅ 전체 파이프라인 완료!")
-        
+        print("\n✅ Full pipeline completed!")
+
     elif args.step == 'coordinate':
-        print("좌표계 변환 실행...")
+        print("Running coordinate conversion...")
         try:
             from setup_liftover import convert_all_enhancer_files
             convert_all_enhancer_files()
-            print("✅ 좌표계 변환 완료")
+            print("✅ Coordinate conversion completed")
         except Exception as e:
-            print(f"❌ 좌표계 변환 실패: {e}")
+            print(f"❌ Coordinate conversion failed: {e}")
             import traceback
             traceback.print_exc()
 
     elif args.step == 'ldsc':
-        print("LDSC 분석 실행...")
+        print("Running LDSC analysis...")
         try:
             from ldsc_analysis_system import main as ldsc_main
             ldsc_main()
-            print("✅ LDSC 분석 완료")
+            print("✅ LDSC analysis completed")
         except Exception as e:
-            print(f"❌ LDSC 분석 실패: {e}")
-            print("LDSC 환경이 설정되어 있는지 확인하세요.")
+            print(f"❌ LDSC analysis failed: {e}")
+            print("Please check if LDSC environment is configured.")
             import traceback
             traceback.print_exc()
 
     elif args.step == 'visualize':
-        print("시각화 실행...")
+        print("Running visualization...")
         try:
             import sys
             sys.path.insert(0, str(Path(__file__).parent / "1.Scripts" / "Visualization"))
@@ -133,12 +133,12 @@ def main():
             annotations = celltype_manhattan_plot.compute_snp_overlaps(gwas_data, annotations)
             celltype_manhattan_plot.create_celltype_manhattan_plots(gwas_data, annotations)
             celltype_manhattan_plot.create_comparison_manhattan(gwas_data, annotations)
-            print("✅ 시각화 완료")
+            print("✅ Visualization completed")
         except Exception as e:
-            print(f"❌ 시각화 실패: {e}")
+            print(f"❌ Visualization failed: {e}")
             import traceback
             traceback.print_exc()
-        
+
     else:
         parser.print_help()
 

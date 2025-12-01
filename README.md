@@ -94,6 +94,12 @@ Researchers who require access to the data for collaborative purposes may contac
 
 ## Reference
 
+This project uses published enhancer annotations, midbrain cell-type datasets, and statistical genetics methods as described in:
+
+- **Nott A et al.** Cell type–specific enhancer–promoter interactome maps of the human brain. *Science*. 2019; 366(6469):1134–1139.
+
+- **Agarwal D et al.** A single-cell atlas of the human midbrain identifies cell-specific genetic risk for Parkinson's disease. *Nature Neuroscience*. 2020; 23:939–951.
+
 This project makes use of the CHAS deconvolution framework as described in:
 
 - **Murphy KB et al.** *CHAS infers cell type–specific signatures in bulk brain histone acetylation studies of neurological and psychiatric disorders.* Cell Reports Methods. 2025; 5.
