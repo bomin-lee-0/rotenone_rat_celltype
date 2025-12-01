@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-염색체 좌표계 변환 유틸리티
-========================
-rn7 → hg38 → hg19 좌표계 변환
+Chromosome Coordinate Conversion Utility
+========================================
+rn7 → hg38 → hg19 coordinate system conversion
 """
 
 import pandas as pd
@@ -20,93 +20,93 @@ logger = logging.getLogger(__name__)
 
 
 class CoordinateConverter:
-    """염색체 좌표계 변환 클래스"""
-    
+    """Chromosome coordinate conversion class"""
+
     def __init__(self):
         self.base_dir = Path(".")
         self.reference_dir = self.base_dir / "0_data" / "reference"
         self.liftover_dir = self.reference_dir / "liftover_data"
-        
-        # LiftOver 체인 파일 경로
+
+        # LiftOver chain file paths
         self.chain_files = {
             'rn7_to_hg38': self.liftover_dir / "rn7ToHg38.over.chain.gz",
             'hg38_to_hg19': self.liftover_dir / "hg38ToHg19.over.chain.gz"
         }
-        
-        # LiftOver 실행 파일 경로
+
+        # LiftOver executable path
         self.liftover_cmd = self.liftover_dir / "liftOver"
-        
-        logger.info("좌표계 변환기 초기화")
-    
+
+        logger.info("Coordinate converter initialized")
+
     def check_liftover_availability(self) -> Dict[str, bool]:
-        """LiftOver 도구 및 체인 파일 확인"""
+        """Check LiftOver tool and chain file availability"""
         status = {
             'liftover_executable': self.liftover_cmd.exists() and os.access(self.liftover_cmd, os.X_OK),
             'rn7_to_hg38_chain': self.chain_files['rn7_to_hg38'].exists(),
             'hg38_to_hg19_chain': self.chain_files['hg38_to_hg19'].exists()
         }
-        
-        logger.info(f"LiftOver 가용성 체크:")
+
+        logger.info(f"LiftOver availability check:")
         for component, available in status.items():
             logger.info(f"  {component}: {'✅' if available else '❌'}")
-        
+
         return status
-    
+
     def detect_coordinate_system(self, bed_file: Path) -> str:
-        """BED 파일의 좌표계 추정"""
-        logger.info(f"좌표계 추정 중: {bed_file}")
-        
-        # 샘플 영역 읽기
+        """Estimate coordinate system of BED file"""
+        logger.info(f"Estimating coordinate system: {bed_file}")
+
+        # Read sample regions
         sample_df = pd.read_csv(bed_file, sep='\t', header=None, nrows=100,
                                names=['chr', 'start', 'end', 'name'])
-        
-        # 염색체 1번의 좌표 범위 확인
+
+        # Check coordinate range for chromosome 1
         chr1_data = sample_df[sample_df['chr'] == 'chr1']
         if len(chr1_data) == 0:
             return "unknown"
-        
+
         max_pos = chr1_data['end'].max()
         min_pos = chr1_data['start'].min()
-        
-        logger.info(f"  염색체 1번 좌표 범위: {min_pos:,} - {max_pos:,}")
-        
-        # 휴리스틱 기반 좌표계 추정
-        if max_pos > 240000000:  # hg19/hg38 (약 249Mb)
+
+        logger.info(f"  Chromosome 1 coordinate range: {min_pos:,} - {max_pos:,}")
+
+        # Heuristic-based coordinate system estimation
+        if max_pos > 240000000:  # hg19/hg38 (~249Mb)
             if max_pos > 248000000:
                 return "hg19_or_hg38"
             else:
                 return "hg19_or_hg38"
-        elif max_pos > 260000000:  # rn7 (약 285Mb)
+        elif max_pos > 260000000:  # rn7 (~285Mb)
             return "rn7"
         else:
             return "unknown"
-    
+
     def convert_bed_coordinates(self, input_bed: Path, output_bed: Path,
                                from_assembly: str, to_assembly: str) -> bool:
-        """BED 파일 좌표 변환"""
-        logger.info(f"좌표 변환: {from_assembly} → {to_assembly}")
-        
-        # 체인 파일 매핑
+        """Convert BED file coordinates"""
+        logger.info(f"Coordinate conversion: {from_assembly} → {to_assembly}")
+
+        # Chain file mapping
         chain_mapping = {
             ('rn7', 'hg38'): 'rn7_to_hg38',
             ('hg38', 'hg19'): 'hg38_to_hg19'
         }
-        
+
         chain_key = (from_assembly, to_assembly)
         if chain_key not in chain_mapping:
-            logger.error(f"지원하지 않는 변환: {from_assembly} → {to_assembly}")
+            logger.error(f"Unsupported conversion: {from_assembly} → {to_assembly}")
             return False
-        
+
         chain_file = self.chain_files[chain_mapping[chain_key]]
         if not chain_file.exists():
-            logger.error(f"체인 파일을 찾을 수 없습니다: {chain_file}")
+            logger.error(f"Chain file not found: {chain_file}")
             return False
-        
-        # 임시 파일 생성
+
+        # Create temporary files
         with tempfile.NamedTemporaryFile(mode='w', suffix='.bed', delete=False) as tmp_input:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.bed', delete=False) as tmp_unmapped:
                 try:
-                    # LiftOver 실행
+                    # Run LiftOver
                     cmd = [
                         str(self.liftover_cmd),
                         str(input_bed),
@@ -114,131 +114,131 @@ class CoordinateConverter:
                         str(output_bed),
                         tmp_unmapped.name
                     ]
-                    
+
                     result = subprocess.run(cmd, capture_output=True, text=True)
-                    
+
                     if result.returncode == 0:
-                        logger.info(f"좌표 변환 성공: {output_bed}")
-                        
-                        # 변환 통계
+                        logger.info(f"Coordinate conversion successful: {output_bed}")
+
+                        # Conversion statistics
                         if output_bed.exists():
                             original_count = sum(1 for _ in open(input_bed))
                             converted_count = sum(1 for _ in open(output_bed))
                             success_rate = converted_count / original_count * 100
-                            
-                            logger.info(f"  변환 성공률: {converted_count}/{original_count} ({success_rate:.1f}%)")
-                        
+
+                            logger.info(f"  Conversion success rate: {converted_count}/{original_count} ({success_rate:.1f}%)")
+
                         return True
                     else:
-                        logger.error(f"LiftOver 실행 실패: {result.stderr}")
+                        logger.error(f"LiftOver execution failed: {result.stderr}")
                         return False
-                        
+
                 finally:
-                    # 임시 파일 정리
+                    # Clean up temporary files
                     try:
                         os.unlink(tmp_input.name)
                         os.unlink(tmp_unmapped.name)
                     except:
                         pass
-    
+
     def setup_liftover_environment(self):
-        """LiftOver 환경 설정"""
-        logger.info("LiftOver 환경 설정 중...")
-        
-        # 디렉토리 생성
+        """Set up LiftOver environment"""
+        logger.info("Setting up LiftOver environment...")
+
+        # Create directory
         self.liftover_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 필요한 파일들 다운로드 URL
+
+        # Download URLs for required files
         download_urls = {
             'liftOver': 'http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/liftOver',
             'rn7ToHg38.over.chain.gz': 'http://hgdownload.soe.ucsc.edu/goldenPath/rn7/liftOver/rn7ToHg38.over.chain.gz',
             'hg38ToHg19.over.chain.gz': 'http://hgdownload.soe.ucsc.edu/goldenPath/hg38/liftOver/hg38ToHg19.over.chain.gz'
         }
-        
-        logger.info("자동 다운로드는 지원하지 않습니다.")
-        logger.info("다음 파일들을 수동으로 다운로드하세요:")
+
+        logger.info("Automatic download is not supported.")
+        logger.info("Please download the following files manually:")
         for filename, url in download_urls.items():
             target_path = self.liftover_dir / filename
             logger.info(f"  {filename}: {url}")
             logger.info(f"    → {target_path}")
-        
+
         return False
 
 
 class EnhancedDataManager:
-    """좌표계 변환이 포함된 데이터 매니저"""
-    
+    """Data manager with coordinate conversion support"""
+
     def __init__(self, enhancer_file: Path):
         self.enhancer_file = enhancer_file
         self.converter = CoordinateConverter()
         self.cache_dir = Path("coordinate_conversion_cache")
         self.cache_dir.mkdir(exist_ok=True)
-        
-        logger.info(f"향상된 데이터 매니저 초기화: {enhancer_file}")
-    
+
+        logger.info(f"Enhanced data manager initialized: {enhancer_file}")
+
     def get_converted_enhancer_data(self, target_assembly: str = "hg19") -> Optional[pd.DataFrame]:
-        """좌표계 변환된 enhancer 데이터 반환"""
-        
-        # 캐시 파일 확인
+        """Return coordinate-converted enhancer data"""
+
+        # Check cache file
         cache_file = self.cache_dir / f"{self.enhancer_file.stem}_{target_assembly}.pkl"
         if cache_file.exists():
-            logger.info(f"캐시된 변환 데이터 로딩: {cache_file}")
+            logger.info(f"Loading cached converted data: {cache_file}")
             return pd.read_pickle(cache_file)
-        
-        # 원본 좌표계 추정
+
+        # Estimate original coordinate system
         original_assembly = self.converter.detect_coordinate_system(self.enhancer_file)
-        logger.info(f"추정된 원본 좌표계: {original_assembly}")
-        
+        logger.info(f"Estimated original coordinate system: {original_assembly}")
+
         if original_assembly == target_assembly:
-            logger.info("좌표계 변환이 필요하지 않습니다.")
+            logger.info("Coordinate conversion not required.")
             enhancer_df = pd.read_csv(self.enhancer_file, sep='\t', header=None,
                                     names=['CHR', 'START', 'END', 'NAME'])
-            # 데이터 정리
+            # Clean data
             enhancer_df['CHR'] = enhancer_df['CHR'].str.replace('chr', '')
             numeric_mask = enhancer_df['CHR'].str.isnumeric()
             enhancer_df = enhancer_df[numeric_mask].copy()
             enhancer_df['CHR'] = enhancer_df['CHR'].astype(int)
             enhancer_df = enhancer_df[enhancer_df['CHR'].isin(range(1, 23))]
-            
-            # 캐시 저장
+
+            # Save cache
             enhancer_df.to_pickle(cache_file)
             return enhancer_df
-        
-        # 좌표계 변환 필요
-        logger.warning("좌표계 변환이 필요하지만 LiftOver 도구가 설정되지 않았습니다.")
-        logger.info("현재는 원본 데이터를 그대로 사용합니다.")
-        logger.info("정확한 분석을 위해서는 좌표계 변환을 수행하세요.")
-        
-        # 임시로 원본 데이터 반환
+
+        # Coordinate conversion required
+        logger.warning("Coordinate conversion required but LiftOver tool is not configured.")
+        logger.info("Using original data as-is for now.")
+        logger.info("For accurate analysis, please perform coordinate conversion.")
+
+        # Temporarily return original data
         enhancer_df = pd.read_csv(self.enhancer_file, sep='\t', header=None,
                                 names=['CHR', 'START', 'END', 'NAME'])
-        # 데이터 정리
+        # Clean data
         enhancer_df['CHR'] = enhancer_df['CHR'].str.replace('chr', '')
         numeric_mask = enhancer_df['CHR'].str.isnumeric()
         enhancer_df = enhancer_df[numeric_mask].copy()
         enhancer_df['CHR'] = enhancer_df['CHR'].astype(int)
         enhancer_df = enhancer_df[enhancer_df['CHR'].isin(range(1, 23))]
-        
+
         return enhancer_df
 
 
 def main():
-    """테스트 및 검증"""
+    """Test and validation"""
     converter = CoordinateConverter()
-    
-    # 환경 체크
+
+    # Environment check
     status = converter.check_liftover_availability()
-    
+
     if not all(status.values()):
-        logger.warning("LiftOver 환경이 완전하지 않습니다.")
+        logger.warning("LiftOver environment is not complete.")
         converter.setup_liftover_environment()
-    
-    # 샘플 파일 좌표계 추정
+
+    # Estimate coordinate system for sample files
     sample_files = [
         Path("0_data/raw/cleaned_data/Olig_cleaned.bed"),
         Path("0_data/raw/unique_data/Olig_unique.bed")
     ]
-    
+
     for sample_file in sample_files:
         if sample_file.exists():
             assembly = converter.detect_coordinate_system(sample_file)

@@ -26,8 +26,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class LDSCConfig:
-    """LDSC 분석을 위한 설정 클래스"""
-    
+    """Configuration class for LDSC analysis"""
+
     def __init__(self):
         # Base directories
         self.base_dir = Path("/scratch/prj/eng_waste_to_protein/repositories/bomin")
@@ -59,10 +59,10 @@ class LDSCConfig:
         # Original GWAS data
         self.gwas_data_file = self.base_dir / "0_data" / "raw" / "GCST009325.h.tsv.gz"
         
-        logger.info("LDSC 설정 초기화 완료")
-        
+        logger.info("LDSC configuration initialization complete")
+
     def validate_reference_files(self) -> bool:
-        """Reference 파일들 존재 확인"""
+        """Validate reference files existence"""
         required_files = [
             self.gwas_data_file,
             self.ldsc_dir / "ldsc.py",
@@ -89,15 +89,15 @@ class LDSCConfig:
         return True
 
 class AnnotationGenerator:
-    """LDSC annotation 파일 생성 클래스"""
-    
+    """Class for generating LDSC annotation files"""
+
     def __init__(self, config: LDSCConfig):
         self.config = config
-        logger.info("Annotation Generator 초기화")
-    
+        logger.info("Annotation Generator initialized")
+
     def create_enhancer_annotations(self) -> Dict[str, Path]:
-        """각 enhancer BED 파일을 LDSC annotation으로 변환"""
-        logger.info("🧬 Enhancer annotations 생성 시작")
+        """Convert each enhancer BED file to LDSC annotation"""
+        logger.info("🧬 Starting enhancer annotations generation")
         
         # Get all hg19 BED files
         bed_files = list(self.config.enhancer_bed_dir.glob("*_hg19.bed"))
@@ -128,7 +128,7 @@ class AnnotationGenerator:
         return annotation_files
     
     def _create_chromosome_annotation(self, bed_file: Path, dataset_name: str, chromosome: int) -> Optional[Path]:
-        """특정 염색체에 대한 annotation 파일 생성"""
+        """Create annotation file for a specific chromosome"""
         
         # Read enhancer BED file
         try:
@@ -178,28 +178,28 @@ class AnnotationGenerator:
             return None
 
 class SummaryStatsProcessor:
-    """GWAS summary statistics 처리 클래스"""
-    
+    """Class for processing GWAS summary statistics"""
+
     def __init__(self, config: LDSCConfig):
         self.config = config
-        logger.info("Summary Stats Processor 초기화")
-    
+        logger.info("Summary Stats Processor initialized")
+
     def prepare_gwas_sumstats(self) -> Path:
-        """GWAS summary statistics를 LDSC 형식으로 변환"""
-        logger.info("📊 GWAS summary statistics 준비 중...")
+        """Convert GWAS summary statistics to LDSC format"""
+        logger.info("📊 Preparing GWAS summary statistics...")
         
         # Check if already processed
         munged_file = self.config.sumstats_dir / "parkinson_gwas.sumstats.gz"
         if munged_file.exists():
-            logger.info("  ✅ 이미 처리된 summary statistics 사용")
+            logger.info("  ✅ Using already processed summary statistics")
             return munged_file
-        
+
         # Load original GWAS data
-        logger.info("  📁 원본 GWAS 데이터 로딩...")
+        logger.info("  📁 Loading original GWAS data...")
         gwas_df = pd.read_csv(self.config.gwas_data_file, sep='\t', compression='gzip')
-        
+
         # Prepare for LDSC format
-        logger.info("  🔄 LDSC 형식으로 변환...")
+        logger.info("  🔄 Converting to LDSC format...")
         
         # Column mapping for LDSC
         ldsc_columns = {
@@ -223,7 +223,7 @@ class SummaryStatsProcessor:
             logger.info(f"  📊 Sample size calculated: N_cases + N_controls")
         elif 'N' not in ldsc_df.columns:
             # Use median sample size if individual N is not available
-            logger.warning("  ⚠️ N 컬럼이 없습니다. 평균 샘플 크기를 사용합니다.")
+            logger.warning("  ⚠️ N column not found. Using average sample size.")
             if 'N_cases' in gwas_df.columns and 'N_controls' in gwas_df.columns:
                 median_n = int((gwas_df['N_cases'] + gwas_df['N_controls']).median())
                 ldsc_df['N'] = median_n
@@ -256,7 +256,7 @@ class SummaryStatsProcessor:
         logger.info(f"  📝 Raw sumstats: {len(ldsc_df):,} SNPs")
         
         # Run munge_sumstats.py
-        logger.info("  🔧 munge_sumstats.py 실행...")
+        logger.info("  🔧 Running munge_sumstats.py...")
         
         munge_cmd = [
             "python", str(self.config.ldsc_dir / "munge_sumstats.py"),
@@ -268,7 +268,7 @@ class SummaryStatsProcessor:
         try:
             result = subprocess.run(munge_cmd, capture_output=True, text=True, cwd=str(self.config.ldsc_dir))
             if result.returncode == 0:
-                logger.info("  ✅ munge_sumstats 완료")
+                logger.info("  ✅ munge_sumstats completed")
                 
                 # Clean up temp file
                 temp_file.unlink()
@@ -283,47 +283,47 @@ class SummaryStatsProcessor:
             raise
 
 class LDSCAnalyzer:
-    """LDSC partitioned heritability 분석 클래스"""
-    
+    """Class for LDSC partitioned heritability analysis"""
+
     def __init__(self, config: LDSCConfig):
         self.config = config
-        logger.info("LDSC Analyzer 초기화")
-    
-    def run_partitioned_heritability(self, annotation_files: Dict[str, Dict[int, Path]], 
+        logger.info("LDSC Analyzer initialized")
+
+    def run_partitioned_heritability(self, annotation_files: Dict[str, Dict[int, Path]],
                                    sumstats_file: Path) -> Dict[str, Dict[str, Any]]:
-        """각 enhancer 세트에 대해 partitioned heritability 분석 실행"""
-        logger.info("🧬 LDSC Partitioned Heritability 분석 시작")
-        
+        """Run partitioned heritability analysis for each enhancer set"""
+        logger.info("🧬 Starting LDSC Partitioned Heritability analysis")
+
         all_results = {}
-        
+
         for dataset_name, chr_annotations in annotation_files.items():
-            logger.info(f"\n📊 {dataset_name} 분석 중...")
-            
+            logger.info(f"\n📊 Analyzing {dataset_name}...")
+
             # Create LD scores for this annotation
             ldscores_created = self._create_ld_scores(dataset_name, chr_annotations)
-            
+
             if ldscores_created:
                 # Run LDSC regression
                 h2_results = self._run_ldsc_regression(dataset_name, sumstats_file)
                 if h2_results:
                     all_results[dataset_name] = h2_results
-                    logger.info(f"  ✅ {dataset_name} 분석 완료")
+                    logger.info(f"  ✅ {dataset_name} analysis complete")
                 else:
-                    logger.error(f"  ❌ {dataset_name} LDSC regression 실패")
+                    logger.error(f"  ❌ {dataset_name} LDSC regression failed")
             else:
-                logger.error(f"  ❌ {dataset_name} LD scores 생성 실패")
-        
-        logger.info(f"\n🎉 전체 LDSC 분석 완료: {len(all_results)}/{len(annotation_files)} 성공")
+                logger.error(f"  ❌ {dataset_name} LD scores generation failed")
+
+        logger.info(f"\n🎉 Complete LDSC analysis finished: {len(all_results)}/{len(annotation_files)} successful")
         return all_results
-    
+
     def _create_ld_scores(self, dataset_name: str, chr_annotations: Dict[int, Path]) -> bool:
-        """특정 데이터셋에 대한 LD scores 생성"""
-        logger.info(f"  🔗 {dataset_name} LD scores 생성 중...")
-        
+        """Generate LD scores for a specific dataset"""
+        logger.info(f"  🔗 Generating {dataset_name} LD scores...")
+
         # Check if already exists
         existing_files = list(self.config.results_dir.glob(f"{dataset_name}.*.l2.ldscore.gz"))
         if len(existing_files) >= 20:  # Most chromosomes should exist
-            logger.info(f"    ✅ 기존 LD scores 사용 ({len(existing_files)} 파일)")
+            logger.info(f"    ✅ Using existing LD scores ({len(existing_files)} files)")
             return True
         
         success_count = 0
@@ -355,19 +355,19 @@ class LDSCAnalyzer:
             except Exception as e:
                 logger.warning(f"    Chr{chromosome} LD score error: {e}")
         
-        logger.info(f"    📊 LD scores 생성: {success_count}/22 chromosomes")
+        logger.info(f"    📊 LD scores generated: {success_count}/22 chromosomes")
         return success_count >= 20  # Allow some failures
-    
+
     def _run_ldsc_regression(self, dataset_name: str, sumstats_file: Path) -> Optional[Dict[str, Any]]:
-        """LDSC regression 실행"""
-        logger.info(f"  📈 {dataset_name} LDSC regression 실행...")
+        """Run LDSC regression"""
+        logger.info(f"  📈 Running {dataset_name} LDSC regression...")
         
         output_prefix = self.config.results_dir / f"{dataset_name}_h2"
         
         # Check if results already exist
         results_file = Path(str(output_prefix) + ".log")
         if results_file.exists():
-            logger.info(f"    ✅ 기존 결과 사용")
+            logger.info(f"    ✅ Using existing results")
             return self._parse_ldsc_results(results_file)
         
         try:
@@ -379,7 +379,7 @@ class LDSCAnalyzer:
                     annot_files.append(str(self.config.results_dir / f"{dataset_name}.{chromosome}"))
             
             if len(annot_files) < 20:
-                logger.error(f"    ❌ 불충분한 LD score 파일: {len(annot_files)}")
+                logger.error(f"    ❌ Insufficient LD score files: {len(annot_files)}")
                 return None
             
             # Run LDSC
@@ -401,18 +401,18 @@ class LDSCAnalyzer:
                                   cwd=str(self.config.ldsc_dir))
             
             if result.returncode == 0:
-                logger.info(f"    ✅ LDSC regression 완료")
+                logger.info(f"    ✅ LDSC regression completed")
                 return self._parse_ldsc_results(results_file)
             else:
-                logger.error(f"    ❌ LDSC regression 실패: {result.stderr[:300]}")
+                logger.error(f"    ❌ LDSC regression failed: {result.stderr[:300]}")
                 return None
-                
+
         except Exception as e:
-            logger.error(f"    ❌ LDSC regression 오류: {e}")
+            logger.error(f"    ❌ LDSC regression error: {e}")
             return None
-    
+
     def _parse_ldsc_results(self, results_file: Path) -> Dict[str, Any]:
-        """LDSC 결과 파일 파싱"""
+        """Parse LDSC results file"""
         try:
             with open(results_file, 'r') as f:
                 content = f.read()
@@ -486,15 +486,15 @@ class LDSCAnalyzer:
             return {}
 
 class LDSCResultsAggregator:
-    """LDSC 결과 집계 및 분석 클래스"""
-    
+    """Class for aggregating and analyzing LDSC results"""
+
     def __init__(self, config: LDSCConfig):
         self.config = config
-        logger.info("LDSC Results Aggregator 초기화")
-    
+        logger.info("LDSC Results Aggregator initialized")
+
     def aggregate_results(self, ldsc_results: Dict[str, Dict[str, Any]]) -> pd.DataFrame:
-        """LDSC 결과를 DataFrame으로 집계"""
-        logger.info("📊 LDSC 결과 집계 중...")
+        """Aggregate LDSC results into DataFrame"""
+        logger.info("📊 Aggregating LDSC results...")
         
         aggregated_data = []
         
@@ -536,14 +536,14 @@ class LDSCResultsAggregator:
         output_file = self.config.results_dir / "ldsc_aggregated_results.csv"
         results_df.to_csv(output_file, index=False)
         
-        logger.info(f"✅ 집계 결과 저장: {output_file}")
-        logger.info(f"📊 총 {len(results_df)} 데이터셋 분석 완료")
+        logger.info(f"✅ Aggregated results saved: {output_file}")
+        logger.info(f"📊 Total {len(results_df)} datasets analyzed")
         
         return results_df
     
     def create_summary_report(self, results_df: pd.DataFrame) -> Path:
-        """LDSC 분석 요약 보고서 생성"""
-        logger.info("📋 LDSC 요약 보고서 생성 중...")
+        """Generate LDSC analysis summary report"""
+        logger.info("📋 Generating LDSC summary report...")
         
         report_content = f"""# LDSC Partitioned Heritability Analysis Report
 ==================================================
@@ -652,25 +652,25 @@ class LDSCResultsAggregator:
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write(report_content)
         
-        logger.info(f"📋 요약 보고서 저장: {report_file}")
+        logger.info(f"📋 Summary report saved: {report_file}")
         return report_file
 
 class LDSCPipeline:
-    """전체 LDSC 분석 파이프라인 - 단계별 실행 지원"""
-    
+    """Complete LDSC analysis pipeline - supports step-by-step execution"""
+
     def __init__(self):
         self.config = LDSCConfig()
         self.annotation_generator = AnnotationGenerator(self.config)
         self.sumstats_processor = SummaryStatsProcessor(self.config)
         self.ldsc_analyzer = LDSCAnalyzer(self.config)
         self.results_aggregator = LDSCResultsAggregator(self.config)
-        
-        logger.info("🧬 LDSC Pipeline 초기화 완료")
+
+        logger.info("🧬 LDSC Pipeline initialization complete")
     
     def run_step2_annotations(self) -> Dict[str, Any]:
-        """Step 2: LDSC Annotation 생성만 실행"""
+        """Step 2: Run LDSC Annotation generation only"""
         logger.info("\n" + "=" * 60)
-        logger.info("🧬 Step 2: LDSC Annotations 생성")
+        logger.info("🧬 Step 2: LDSC Annotations Generation")
         logger.info("=" * 60)
         
         try:
@@ -683,88 +683,88 @@ class LDSCPipeline:
             if not annotation_files:
                 raise RuntimeError("No annotations created")
             
-            logger.info(f"\n✅ Step 2 완료: {len(annotation_files)} 데이터셋의 annotation 생성")
+            logger.info(f"\n✅ Step 2 complete: {len(annotation_files)} dataset annotations created")
             return {
                 'success': True,
                 'step': 'annotations',
                 'annotation_files': annotation_files,
                 'datasets_processed': len(annotation_files)
             }
-            
+
         except Exception as e:
-            logger.error(f"❌ Step 2 실패: {e}")
+            logger.error(f"❌ Step 2 failed: {e}")
             return {'success': False, 'step': 'annotations', 'error': str(e)}
-    
+
     def run_step3_sumstats(self) -> Dict[str, Any]:
-        """Step 3: GWAS Summary Statistics 처리만 실행"""
+        """Step 3: Run GWAS Summary Statistics processing only"""
         logger.info("\n" + "=" * 60)
-        logger.info("📊 Step 3: GWAS Summary Statistics 처리")
+        logger.info("📊 Step 3: GWAS Summary Statistics Processing")
         logger.info("=" * 60)
         
         try:
             # Prepare summary statistics
             sumstats_file = self.sumstats_processor.prepare_gwas_sumstats()
             
-            logger.info(f"\n✅ Step 3 완료: {sumstats_file}")
+            logger.info(f"\n✅ Step 3 complete: {sumstats_file}")
             return {
                 'success': True,
                 'step': 'sumstats',
                 'sumstats_file': sumstats_file
             }
-            
+
         except Exception as e:
-            logger.error(f"❌ Step 3 실패: {e}")
+            logger.error(f"❌ Step 3 failed: {e}")
             return {'success': False, 'step': 'sumstats', 'error': str(e)}
-    
+
     def run_step4_ldsc(self) -> Dict[str, Any]:
-        """Step 4: LDSC Regression 분석만 실행 (기존 데이터 사용)"""
+        """Step 4: Run LDSC Regression analysis only (using existing data)"""
         logger.info("\n" + "=" * 60)
-        logger.info("🔗 Step 4: LDSC Regression 분석")
+        logger.info("🔗 Step 4: LDSC Regression Analysis")
         logger.info("=" * 60)
         
         try:
             # Load existing annotation files
             annotation_files = self._load_existing_annotations()
             if not annotation_files:
-                raise RuntimeError("기존 annotation 파일을 찾을 수 없습니다. Step 2를 먼저 실행하세요.")
-            
+                raise RuntimeError("Existing annotation files not found. Please run Step 2 first.")
+
             # Load existing sumstats
             sumstats_file = self.config.sumstats_dir / "parkinson_gwas.sumstats.gz"
             if not sumstats_file.exists():
-                raise RuntimeError("기존 summary statistics를 찾을 수 없습니다. Step 3를 먼저 실행하세요.")
+                raise RuntimeError("Existing summary statistics not found. Please run Step 3 first.")
             
             # Run LDSC analysis using BaselineLD (optimized)
             ldsc_results = self._run_optimized_ldsc_regression(annotation_files, sumstats_file)
             
-            logger.info(f"\n✅ Step 4 완료: {len(ldsc_results)} 데이터셋 분석")
+            logger.info(f"\n✅ Step 4 complete: {len(ldsc_results)} datasets analyzed")
             return {
                 'success': True,
                 'step': 'ldsc',
                 'ldsc_results': ldsc_results,
                 'datasets_analyzed': len(ldsc_results)
             }
-            
+
         except Exception as e:
-            logger.error(f"❌ Step 4 실패: {e}")
+            logger.error(f"❌ Step 4 failed: {e}")
             return {'success': False, 'step': 'ldsc', 'error': str(e)}
-    
+
     def run_step5_results(self) -> Dict[str, Any]:
-        """Step 5: 결과 집계 및 보고서 생성만 실행"""
+        """Step 5: Run results aggregation and report generation only"""
         logger.info("\n" + "=" * 60)
-        logger.info("📊 Step 5: 결과 집계 및 보고서 생성")
+        logger.info("📊 Step 5: Results Aggregation and Report Generation")
         logger.info("=" * 60)
         
         try:
             # Load existing LDSC results
             ldsc_results = self._load_existing_ldsc_results()
             if not ldsc_results:
-                raise RuntimeError("기존 LDSC 결과를 찾을 수 없습니다. Step 4를 먼저 실행하세요.")
+                raise RuntimeError("Existing LDSC results not found. Please run Step 4 first.")
             
             # Aggregate results
             results_df = self.results_aggregator.aggregate_results(ldsc_results)
             report_file = self.results_aggregator.create_summary_report(results_df)
             
-            logger.info(f"\n✅ Step 5 완료: {len(results_df)} 데이터셋 집계")
+            logger.info(f"\n✅ Step 5 complete: {len(results_df)} datasets aggregated")
             return {
                 'success': True,
                 'step': 'results',
@@ -772,13 +772,13 @@ class LDSCPipeline:
                 'report_file': report_file,
                 'significant_enrichments': len(results_df[results_df['enrichment_p'] < 0.05])
             }
-            
+
         except Exception as e:
-            logger.error(f"❌ Step 5 실패: {e}")
+            logger.error(f"❌ Step 5 failed: {e}")
             return {'success': False, 'step': 'results', 'error': str(e)}
-    
+
     def _load_existing_annotations(self) -> Dict[str, Dict[int, Path]]:
-        """기존 annotation 파일들 로드"""
+        """Load existing annotation files"""
         annotation_files = {}
         
         # Get all annotation files
@@ -797,19 +797,19 @@ class LDSCPipeline:
                     dataset_files[dataset] = {}
                 dataset_files[dataset][chromosome] = annot_file
         
-        logger.info(f"기존 annotation 로드: {len(dataset_files)} 데이터셋")
+        logger.info(f"Existing annotations loaded: {len(dataset_files)} datasets")
         return dataset_files
-    
-    def _run_optimized_ldsc_regression(self, annotation_files: Dict[str, Dict[int, Path]], 
+
+    def _run_optimized_ldsc_regression(self, annotation_files: Dict[str, Dict[int, Path]],
                                      sumstats_file: Path) -> Dict[str, Dict[str, Any]]:
-        """BaselineLD를 사용한 최적화된 LDSC regression"""
+        """Optimized LDSC regression using BaselineLD"""
         import time
-        
-        logger.info("🔗 Partitioned Heritability 분석 시작")
-        
+
+        logger.info("🔗 Starting Partitioned Heritability analysis")
+
         total_datasets = len(annotation_files)
-        logger.info(f"📊 총 {total_datasets}개 세포타입 데이터셋 분석 예정")
-        logger.info(f"⏱️ 예상 총 소요시간: {total_datasets * 45}분 (데이터셋당 ~45분)")
+        logger.info(f"📊 Total {total_datasets} cell type datasets to analyze")
+        logger.info(f"⏱️ Estimated total time: {total_datasets * 45} minutes (~45 min per dataset)")
         
         all_results = {}
         overall_start_time = time.time()
@@ -823,11 +823,11 @@ class LDSCPipeline:
                 avg_time_per_dataset = elapsed / (i - 1)
                 remaining_datasets = total_datasets - i + 1
                 eta_minutes = int((remaining_datasets * avg_time_per_dataset) / 60)
-                eta_info = f"전체 ETA: {eta_minutes}분"
+                eta_info = f"Total ETA: {eta_minutes} min"
             else:
-                eta_info = "전체 ETA: 계산중..."
-            
-            logger.info(f"\n{dataset_progress} 📊 {dataset_name} 분석 중... {eta_info}")
+                eta_info = "Total ETA: calculating..."
+
+            logger.info(f"\n{dataset_progress} 📊 Analyzing {dataset_name}... {eta_info}")
             
             dataset_start_time = time.time()
             
@@ -838,26 +838,26 @@ class LDSCPipeline:
             
             if h2_results:
                 all_results[dataset_name] = h2_results
-                logger.info(f"  {dataset_progress} ✅ {dataset_name} 분석 완료 ({dataset_time/60:.1f}분 소요)")
+                logger.info(f"  {dataset_progress} ✅ {dataset_name} analysis complete ({dataset_time/60:.1f} min)")
             else:
-                logger.error(f"  {dataset_progress} ❌ {dataset_name} LDSC regression 실패 ({dataset_time/60:.1f}분 소요)")
-        
+                logger.error(f"  {dataset_progress} ❌ {dataset_name} LDSC regression failed ({dataset_time/60:.1f} min)")
+
         total_time = time.time() - overall_start_time
-        logger.info(f"\n🎉 Partitioned Heritability 분석 완료: {len(all_results)}/{total_datasets} 성공")
-        logger.info(f"⏱️ 총 소요시간: {total_time/60:.1f}분")
+        logger.info(f"\n🎉 Partitioned Heritability analysis complete: {len(all_results)}/{total_datasets} successful")
+        logger.info(f"⏱️ Total time elapsed: {total_time/60:.1f} min")
         return all_results
-    
+
     def _run_baseline_ldsc_regression(self, dataset_name: str, chr_annotations: Dict[int, Path],
                                     sumstats_file: Path) -> Optional[Dict[str, Any]]:
-        """학술적으로 정교한 세포타입별 partitioned heritability 분석"""
-        logger.info(f"  📈 {dataset_name} 세포타입별 Partitioned Heritability 분석...")
+        """Academically rigorous cell type-specific partitioned heritability analysis"""
+        logger.info(f"  📈 {dataset_name} Cell type-specific Partitioned Heritability analysis...")
         
         output_prefix = self.config.results_dir / f"{dataset_name}_h2"
         
         # Check if results already exist
         results_file = Path(str(output_prefix) + ".log")
         if results_file.exists():
-            logger.info(f"    ✅ 기존 결과 사용")
+            logger.info(f"    ✅ Using existing results")
             parsed_results = self.ldsc_analyzer._parse_ldsc_results(results_file)
             if parsed_results and 'enrichment' not in parsed_results:
                 # Extract cell-type specific enrichment from existing results
@@ -868,7 +868,7 @@ class LDSCPipeline:
         
         try:
             # Use efficient BaselineLD-based approach with cell-type specific weighting
-            logger.info(f"    🔗 효율적인 BaselineLD 기반 {dataset_name} enrichment 분석")
+            logger.info(f"    🔗 Efficient BaselineLD-based {dataset_name} enrichment analysis")
             ref_ld_chr = str(self.config.baseline_ld)
             
             logger.info(f"    🔍 Partitioned heritability paths:")
@@ -893,32 +893,32 @@ class LDSCPipeline:
                                   cwd="/scratch/prj/eng_waste_to_protein/repositories/bomin/1_preprocessing/ldsc-python3")
             
             if result.returncode == 0:
-                logger.info(f"    ✅ Partitioned heritability regression 완료")
-                
+                logger.info(f"    ✅ Partitioned heritability regression complete")
+
                 # Parse results and extract cell-type specific enrichment
                 parsed_results = self.ldsc_analyzer._parse_ldsc_results(results_file)
-                
+
                 if parsed_results:
                     # Calculate cell-type specific enrichment using BaselineLD enhancer categories
                     enrichment_data = self._calculate_celltype_weighted_enrichment(dataset_name, results_file)
                     if enrichment_data:
                         parsed_results.update(enrichment_data)
-                        logger.info(f"    📊 {dataset_name} 세포타입별 enrichment 계산 완료")
+                        logger.info(f"    📊 {dataset_name} cell type-specific enrichment calculation complete")
                         logger.info(f"    📈 Enrichment: {enrichment_data.get('enrichment', 'N/A'):.3f} ± {enrichment_data.get('enrichment_se', 'N/A'):.3f}")
                         logger.info(f"    📊 P-value: {enrichment_data.get('enrichment_p', 'N/A'):.2e}")
-                
+
                 return parsed_results
             else:
-                logger.error(f"    ❌ Partitioned heritability regression 실패: {result.stderr[:500]}...")
+                logger.error(f"    ❌ Partitioned heritability regression failed: {result.stderr[:500]}...")
                 return None
-                
+
         except Exception as e:
-            logger.error(f"    ❌ Partitioned heritability regression 오류: {e}")
+            logger.error(f"    ❌ Partitioned heritability regression error: {e}")
             return None
-    
+
     def _create_combined_annotations(self, dataset_name: str, chr_annotations: Dict[int, Path]) -> Optional[Dict[int, Path]]:
-        """BaselineLD annotation에 세포타입별 enhancer를 98번째 카테고리로 추가"""
-        logger.info(f"    📊 {dataset_name} annotation을 BaselineLD에 결합 중...")
+        """Add cell type-specific enhancer as 98th category to BaselineLD annotation"""
+        logger.info(f"    📊 Combining {dataset_name} annotation with BaselineLD...")
         
         combined_annotations = {}
         
@@ -934,11 +934,11 @@ class LDSCPipeline:
                     enhancer_annot = self.config.annotations_dir / f"{dataset_name}.{chromosome}.annot.gz"
                 
                 if not baseline_annot.exists():
-                    logger.warning(f"      ⚠️ Chr{chromosome}: BaselineLD annotation 없음")
+                    logger.warning(f"      ⚠️ Chr{chromosome}: BaselineLD annotation not found")
                     continue
-                    
+
                 if not enhancer_annot.exists():
-                    logger.warning(f"      ⚠️ Chr{chromosome}: {dataset_name} enhancer annotation 없음")
+                    logger.warning(f"      ⚠️ Chr{chromosome}: {dataset_name} enhancer annotation not found")
                     continue
                 
                 # Output combined annotation file
@@ -947,73 +947,73 @@ class LDSCPipeline:
                 if not combined_file.exists():
                     success = self._merge_annotations(baseline_annot, enhancer_annot, combined_file, chromosome)
                     if success:
-                        logger.info(f"      ✅ Chr{chromosome}: Combined annotation 생성 완료")
+                        logger.info(f"      ✅ Chr{chromosome}: Combined annotation created")
                     else:
-                        logger.warning(f"      ⚠️ Chr{chromosome}: Combined annotation 생성 실패")
+                        logger.warning(f"      ⚠️ Chr{chromosome}: Combined annotation creation failed")
                         continue
                 else:
-                    logger.info(f"      ✅ Chr{chromosome}: 기존 combined annotation 사용")
-                
+                    logger.info(f"      ✅ Chr{chromosome}: Using existing combined annotation")
+
                 combined_annotations[chromosome] = combined_file
-                
+
             except Exception as e:
-                logger.warning(f"      ⚠️ Chr{chromosome}: Combined annotation 오류: {e}")
+                logger.warning(f"      ⚠️ Chr{chromosome}: Combined annotation error: {e}")
         
         logger.info(f"    📊 Combined annotations: {len(combined_annotations)}/22 chromosomes")
         return combined_annotations if len(combined_annotations) >= 15 else None
     
     def _merge_annotations(self, baseline_file: Path, enhancer_file: Path, output_file: Path, chromosome: int) -> bool:
-        """BaselineLD와 enhancer annotation을 결합"""
+        """Merge BaselineLD and enhancer annotations"""
         try:
             import pandas as pd
             import gzip
-            
+
             # Read BaselineLD annotation (97 categories)
-            logger.info(f"        📁 Chr{chromosome}: BaselineLD 읽는 중...")
+            logger.info(f"        📁 Chr{chromosome}: Reading BaselineLD...")
             baseline_df = pd.read_csv(baseline_file, sep='\t', compression='gzip')
-            
+
             # Read enhancer annotation (should have CHR, BP, SNP, CM, and enhancer column)
-            logger.info(f"        📁 Chr{chromosome}: {enhancer_file.name} 읽는 중...")
+            logger.info(f"        📁 Chr{chromosome}: Reading {enhancer_file.name}...")
             enhancer_df = pd.read_csv(enhancer_file, sep='\t', compression='gzip')
-            
+
             # Merge on SNP coordinates (CHR, BP, SNP)
-            logger.info(f"        🔗 Chr{chromosome}: Annotation 결합 중...")
+            logger.info(f"        🔗 Chr{chromosome}: Merging annotations...")
             merged_df = baseline_df.merge(
                 enhancer_df[['CHR', 'BP', 'SNP'] + [col for col in enhancer_df.columns if col not in ['CHR', 'BP', 'SNP', 'CM']]],
                 on=['CHR', 'BP', 'SNP'],
                 how='left'
             )
-            
+
             # Fill missing enhancer values with 0
             enhancer_cols = [col for col in enhancer_df.columns if col not in ['CHR', 'BP', 'SNP', 'CM']]
             for col in enhancer_cols:
                 merged_df[col] = merged_df[col].fillna(0)
-            
+
             # Save combined annotation
-            logger.info(f"        💾 Chr{chromosome}: Combined annotation 저장 중...")
+            logger.info(f"        💾 Chr{chromosome}: Saving combined annotation...")
             with gzip.open(output_file, 'wt') as f:
                 merged_df.to_csv(f, sep='\t', index=False)
-            
+
             logger.info(f"        ✅ Chr{chromosome}: {len(merged_df)} SNPs with {len(merged_df.columns)-4} categories")
             return True
-            
+
         except Exception as e:
-            logger.error(f"        ❌ Chr{chromosome}: Annotation 결합 실패: {e}")
+            logger.error(f"        ❌ Chr{chromosome}: Annotation merge failed: {e}")
             return False
     
     def _create_celltype_ld_scores(self, dataset_name: str, combined_annotations: Dict[int, Path]) -> bool:
-        """세포타입별 combined annotation에 대한 LD scores 생성"""
-        logger.info(f"    🔗 {dataset_name} combined LD scores 생성 중...")
-        
+        """Generate LD scores for cell type-specific combined annotations"""
+        logger.info(f"    🔗 Generating {dataset_name} combined LD scores...")
+
         # Check if already exists
         existing_files = list(self.config.results_dir.glob(f"{dataset_name}_combined.*.l2.ldscore.gz"))
         if len(existing_files) >= 15:
-            logger.info(f"    ✅ 기존 combined LD scores 사용 ({len(existing_files)} 파일)")
+            logger.info(f"    ✅ Using existing combined LD scores ({len(existing_files)} files)")
             return True
-        
+
         success_count = 0
         total_chr = len(combined_annotations)
-        logger.info(f"    📊 총 {total_chr}개 염색체 combined LD score 생성 예정")
+        logger.info(f"    📊 Total {total_chr} chromosome combined LD scores to generate")
         
         import time
         start_time = time.time()
@@ -1028,12 +1028,12 @@ class LDSCPipeline:
                     avg_time_per_chr = elapsed / (i - 1)
                     remaining_chr = total_chr - i + 1
                     eta_minutes = int((remaining_chr * avg_time_per_chr) / 60)
-                    eta_info = f"ETA: {eta_minutes}분"
+                    eta_info = f"ETA: {eta_minutes} min"
                 else:
-                    eta_info = "ETA: 계산중..."
-                
+                    eta_info = "ETA: calculating..."
+
                 chr_start_time = time.time()
-                logger.info(f"      {progress} Chr{chromosome} combined LD score 생성 시작... {eta_info}")
+                logger.info(f"      {progress} Chr{chromosome} combined LD score generation starting... {eta_info}")
                 
                 # Create LD scores for combined annotation
                 ldscore_cmd = [
@@ -1054,31 +1054,31 @@ class LDSCPipeline:
                 
                 if result.returncode == 0:
                     success_count += 1
-                    logger.info(f"      {progress} ✅ Chr{chromosome} combined LD score 완료 ({chr_time:.1f}초)")
+                    logger.info(f"      {progress} ✅ Chr{chromosome} combined LD score complete ({chr_time:.1f}s)")
                 else:
-                    logger.warning(f"      {progress} ⚠️ Chr{chromosome} combined LD score 실패 ({chr_time:.1f}초)")
+                    logger.warning(f"      {progress} ⚠️ Chr{chromosome} combined LD score failed ({chr_time:.1f}s)")
                     logger.warning(f"        Error: {result.stderr[:300]}...")
-                    
+
             except Exception as e:
-                logger.warning(f"      {progress} ⚠️ Chr{chromosome} combined LD score 오류: {e}")
-        
+                logger.warning(f"      {progress} ⚠️ Chr{chromosome} combined LD score error: {e}")
+
         total_time = time.time() - start_time
-        logger.info(f"    📊 Combined LD scores 생성 완료: {success_count}/{total_chr} chromosomes ({total_time/60:.1f}분 소요)")
+        logger.info(f"    📊 Combined LD scores generation complete: {success_count}/{total_chr} chromosomes ({total_time/60:.1f} min)")
         return success_count >= min(15, total_chr * 0.7)
-    
+
     def _create_enhancer_ld_scores_direct(self, dataset_name: str, available_chromosomes: list) -> bool:
-        """기존 enhancer annotation에서 직접 LD scores 생성"""
-        logger.info(f"    🔗 {dataset_name} enhancer LD scores 생성 중 (BaselineLD 97 + enhancer)...")
+        """Generate LD scores directly from existing enhancer annotation"""
+        logger.info(f"    🔗 Generating {dataset_name} enhancer LD scores (BaselineLD 97 + enhancer)...")
         
         # Check if already exists
         existing_files = list(self.config.results_dir.glob(f"{dataset_name}.*.l2.ldscore.gz"))
         if len(existing_files) >= 15:
-            logger.info(f"    ✅ 기존 enhancer LD scores 사용 ({len(existing_files)} 파일)")
+            logger.info(f"    ✅ Using existing enhancer LD scores ({len(existing_files)} files)")
             return True
-        
+
         success_count = 0
         total_chr = len(available_chromosomes)
-        logger.info(f"    📊 총 {total_chr}개 염색체 enhancer LD score 생성 예정")
+        logger.info(f"    📊 Total {total_chr} chromosome enhancer LD scores to generate")
         
         import time
         start_time = time.time()
@@ -1093,12 +1093,12 @@ class LDSCPipeline:
                     avg_time_per_chr = elapsed / (i - 1)
                     remaining_chr = total_chr - i + 1
                     eta_minutes = int((remaining_chr * avg_time_per_chr) / 60)
-                    eta_info = f"ETA: {eta_minutes}분"
+                    eta_info = f"ETA: {eta_minutes} min"
                 else:
-                    eta_info = "ETA: 계산중..."
-                
+                    eta_info = "ETA: calculating..."
+
                 chr_start_time = time.time()
-                logger.info(f"      {progress} Chr{chromosome} enhancer LD score 생성 시작... {eta_info}")
+                logger.info(f"      {progress} Chr{chromosome} enhancer LD score generation starting... {eta_info}")
                 
                 # Use existing enhancer annotation (BaselineLD 97 + enhancer)
                 annot_file = self.config.annotations_dir / f"{dataset_name}.{chromosome}.annot.gz"
@@ -1122,22 +1122,22 @@ class LDSCPipeline:
                 
                 if result.returncode == 0:
                     success_count += 1
-                    logger.info(f"      {progress} ✅ Chr{chromosome} enhancer LD score 완료 ({chr_time:.1f}초)")
+                    logger.info(f"      {progress} ✅ Chr{chromosome} enhancer LD score complete ({chr_time:.1f}s)")
                 else:
-                    logger.warning(f"      {progress} ⚠️ Chr{chromosome} enhancer LD score 실패 ({chr_time:.1f}초)")
+                    logger.warning(f"      {progress} ⚠️ Chr{chromosome} enhancer LD score failed ({chr_time:.1f}s)")
                     logger.warning(f"        Error: {result.stderr[:300]}...")
-                    
+
             except Exception as e:
-                logger.warning(f"      {progress} ⚠️ Chr{chromosome} enhancer LD score 오류: {e}")
-        
+                logger.warning(f"      {progress} ⚠️ Chr{chromosome} enhancer LD score error: {e}")
+
         total_time = time.time() - start_time
-        logger.info(f"    📊 Enhancer LD scores 생성 완료: {success_count}/{total_chr} chromosomes ({total_time/60:.1f}분 소요)")
+        logger.info(f"    📊 Enhancer LD scores generation complete: {success_count}/{total_chr} chromosomes ({total_time/60:.1f} min)")
         return success_count >= min(15, total_chr * 0.7)
-    
+
     def _extract_celltype_enrichment_from_log(self, dataset_name: str, results_file: Path) -> Optional[Dict[str, Any]]:
-        """LDSC 로그에서 세포타입별 (98번째 카테고리) enrichment와 p-value 추출"""
+        """Extract cell type-specific (98th category) enrichment and p-value from LDSC log"""
         try:
-            logger.info(f"    📊 {dataset_name} 세포타입별 enrichment 추출 중...")
+            logger.info(f"    📊 Extracting {dataset_name} cell type-specific enrichment...")
             
             log_content = results_file.read_text()
             
@@ -1158,14 +1158,14 @@ class LDSCPipeline:
                     coefficient_se_line = line
             
             if not enrichment_line:
-                logger.warning(f"    ⚠️ {dataset_name}: Enrichment 라인을 찾을 수 없음")
+                logger.warning(f"    ⚠️ {dataset_name}: Enrichment line not found")
                 return None
-            
+
             # Parse enrichment values (98th category = last one)
             enrichment_values = [float(x) for x in enrichment_line.split()[1:] if self._is_float(x)]
-            
+
             if len(enrichment_values) < 98:
-                logger.warning(f"    ⚠️ {dataset_name}: 충분한 enrichment 값이 없음 ({len(enrichment_values)} < 98)")
+                logger.warning(f"    ⚠️ {dataset_name}: Insufficient enrichment values ({len(enrichment_values)} < 98)")
                 return None
             
             # Extract cell-type specific values (98th category, index 97)
@@ -1196,7 +1196,7 @@ class LDSCPipeline:
                     if len(coeff_se_values) > 97:
                         celltype_coeff_se = coeff_se_values[97]
             
-            logger.info(f"    📈 {dataset_name}: 세포타입별 enrichment = {celltype_enrichment:.3f} ± {celltype_se:.3f} (p = {p_value:.2e})")
+            logger.info(f"    📈 {dataset_name}: Cell type-specific enrichment = {celltype_enrichment:.3f} ± {celltype_se:.3f} (p = {p_value:.2e})")
             
             return {
                 'enrichment': celltype_enrichment,
@@ -1208,11 +1208,11 @@ class LDSCPipeline:
             }
             
         except Exception as e:
-            logger.warning(f"    ⚠️ {dataset_name}: 세포타입별 enrichment 추출 실패: {e}")
+            logger.warning(f"    ⚠️ {dataset_name}: Cell type-specific enrichment extraction failed: {e}")
             return None
-    
+
     def _is_float(self, value: str) -> bool:
-        """문자열이 float로 변환 가능한지 확인"""
+        """Check if string can be converted to float"""
         try:
             float(value)
             return True
@@ -1220,8 +1220,8 @@ class LDSCPipeline:
             return False
     
     def _calculate_celltype_weighted_enrichment(self, dataset_name: str, results_file: Path) -> Optional[Dict[str, Any]]:
-        """BaselineLD enhancer 카테고리의 가중평균으로 세포타입별 enrichment 계산"""
-        logger.info(f"    🧮 {dataset_name} 세포타입별 enrichment 계산 중...")
+        """Calculate cell type-specific enrichment using weighted average of BaselineLD enhancer categories"""
+        logger.info(f"    🧮 Calculating {dataset_name} cell type-specific enrichment...")
         
         try:
             import re
@@ -1264,14 +1264,14 @@ class LDSCPipeline:
                             continue
             
             if not enrichment_data:
-                logger.warning(f"    ⚠️ {dataset_name}: enhancer 관련 카테고리를 찾을 수 없음")
+                logger.warning(f"    ⚠️ {dataset_name}: No enhancer-related categories found")
                 return None
-            
+
             # Calculate weighted average enrichment
             valid_enrichments = [d for d in enrichment_data if d['enrichment'] is not None and d['enrichment_se'] is not None]
-            
+
             if not valid_enrichments:
-                logger.warning(f"    ⚠️ {dataset_name}: 유효한 enrichment 값이 없음")
+                logger.warning(f"    ⚠️ {dataset_name}: No valid enrichment values")
                 return None
             
             # Weight by inverse variance (1/SE^2)
@@ -1285,7 +1285,7 @@ class LDSCPipeline:
                     total_weight += weight
             
             if total_weight == 0:
-                logger.warning(f"    ⚠️ {dataset_name}: 가중치 합이 0")
+                logger.warning(f"    ⚠️ {dataset_name}: Total weight is 0")
                 return None
             
             final_enrichment = weighted_enrichment / total_weight
@@ -1304,8 +1304,8 @@ class LDSCPipeline:
             else:
                 combined_p = None
             
-            logger.info(f"    ✅ {dataset_name} 세포타입별 enrichment 계산 완료")
-            logger.info(f"    📊 사용된 enhancer 카테고리: {len(valid_enrichments)}개")
+            logger.info(f"    ✅ {dataset_name} cell type-specific enrichment calculation complete")
+            logger.info(f"    📊 Enhancer categories used: {len(valid_enrichments)}")
             
             return {
                 'enrichment': final_enrichment,
@@ -1315,13 +1315,13 @@ class LDSCPipeline:
             }
             
         except Exception as e:
-            logger.error(f"    ❌ {dataset_name} enrichment 계산 실패: {e}")
+            logger.error(f"    ❌ {dataset_name} enrichment calculation failed: {e}")
             return None
-    
-    def _calculate_enhancer_enrichment(self, dataset_name: str, ldsc_results: Dict[str, Any], 
+
+    def _calculate_enhancer_enrichment(self, dataset_name: str, ldsc_results: Dict[str, Any],
                                      chr_annotations: Dict[int, Path]) -> Optional[Dict[str, Any]]:
-        """BaselineLD의 enhancer 카테고리를 사용해서 세포타입별 enrichment 추정"""
-        logger.info(f"    🧮 {dataset_name} enhancer enrichment 계산 중...")
+        """Estimate cell type-specific enrichment using BaselineLD enhancer categories"""
+        logger.info(f"    🧮 Calculating {dataset_name} enhancer enrichment...")
         
         try:
             import re
@@ -1392,7 +1392,7 @@ class LDSCPipeline:
             
             avg_enrichment = base_avg * cell_modifier * process_modifier
             
-            logger.info(f"    📊 {dataset_name}: 세포타입별 enrichment = {avg_enrichment:.3f} ± {avg_se:.3f}")
+            logger.info(f"    📊 {dataset_name}: Cell type-specific enrichment = {avg_enrichment:.3f} ± {avg_se:.3f}")
             
             # Calculate p-value (z-test against null of 1.0)
             import math
@@ -1409,19 +1409,19 @@ class LDSCPipeline:
             }
             
         except Exception as e:
-            logger.warning(f"    ⚠️ {dataset_name} enhancer enrichment 계산 실패: {e}")
+            logger.warning(f"    ⚠️ {dataset_name} enhancer enrichment calculation failed: {e}")
             return None
-    
+
     def _create_enhancer_ld_scores(self, dataset_name: str, chr_annotations: Dict[int, Path]) -> bool:
-        """Enhancer annotation에 대한 LD scores 생성"""
+        """Generate LD scores for enhancer annotation"""
         import time
-        
-        logger.info(f"    🔗 {dataset_name} LD scores 생성 중...")
-        
+
+        logger.info(f"    🔗 Generating {dataset_name} LD scores...")
+
         # Check if already exists
         existing_files = list(self.config.results_dir.glob(f"{dataset_name}.*.l2.ldscore.gz"))
         if len(existing_files) >= 20:  # Most chromosomes should exist
-            logger.info(f"    ✅ 기존 LD scores 사용 ({len(existing_files)} 파일)")
+            logger.info(f"    ✅ Using existing LD scores ({len(existing_files)} files)")
             return True
         
         # Get list of chromosomes to process
@@ -1432,7 +1432,7 @@ class LDSCPipeline:
                 chromosomes_to_process.append(chromosome)
         
         total_chr = len(chromosomes_to_process)
-        logger.info(f"    📊 총 {total_chr}개 염색체 LD score 생성 예정 (예상시간: {total_chr * 2}분)")
+        logger.info(f"    📊 Total {total_chr} chromosome LD scores to generate (estimated time: {total_chr * 2} min)")
         
         success_count = 0
         start_time = time.time()
@@ -1447,13 +1447,13 @@ class LDSCPipeline:
                 avg_time_per_chr = elapsed / (i - 1)
                 remaining_chr = total_chr - i + 1
                 eta_minutes = int((remaining_chr * avg_time_per_chr) / 60)
-                eta_info = f"ETA: {eta_minutes}분"
+                eta_info = f"ETA: {eta_minutes} min"
             else:
-                eta_info = "ETA: 계산중..."
+                eta_info = "ETA: calculating..."
                 
             try:
                 chr_start_time = time.time()
-                logger.info(f"      {progress} Chr{chromosome} LD score 생성 시작... {eta_info}")
+                logger.info(f"      {progress} Chr{chromosome} LD score generation starting... {eta_info}")
                 
                 # Create LD scores for this chromosome using existing annotation files
                 ldscore_cmd = [
@@ -1474,19 +1474,19 @@ class LDSCPipeline:
                 
                 if result.returncode == 0:
                     success_count += 1
-                    logger.info(f"      {progress} ✅ Chr{chromosome} LD score 완료 ({chr_time:.1f}초)")
+                    logger.info(f"      {progress} ✅ Chr{chromosome} LD score complete ({chr_time:.1f}s)")
                 else:
-                    logger.warning(f"      {progress} ⚠️ Chr{chromosome} LD score 실패 ({chr_time:.1f}초): {result.stderr[:200]}...")
-                    
+                    logger.warning(f"      {progress} ⚠️ Chr{chromosome} LD score failed ({chr_time:.1f}s): {result.stderr[:200]}...")
+
             except Exception as e:
-                logger.warning(f"      {progress} ⚠️ Chr{chromosome} LD score 오류: {e}")
-        
+                logger.warning(f"      {progress} ⚠️ Chr{chromosome} LD score error: {e}")
+
         total_time = time.time() - start_time
-        logger.info(f"    📊 LD scores 생성 완료: {success_count}/{total_chr} chromosomes ({total_time/60:.1f}분 소요)")
+        logger.info(f"    📊 LD scores generation complete: {success_count}/{total_chr} chromosomes ({total_time/60:.1f} min)")
         return success_count >= min(15, total_chr * 0.7)  # Allow some failures
-    
+
     def _load_existing_ldsc_results(self) -> Dict[str, Dict[str, Any]]:
-        """기존 LDSC 결과 파일들 로드"""
+        """Load existing LDSC result files"""
         results = {}
         
         result_files = list(self.config.results_dir.glob("*_h2.log"))
@@ -1497,11 +1497,11 @@ class LDSCPipeline:
             if parsed_results:
                 results[dataset_name] = parsed_results
         
-        logger.info(f"기존 LDSC 결과 로드: {len(results)} 데이터셋")
+        logger.info(f"Existing LDSC results loaded: {len(results)} datasets")
         return results
-    
+
     def run_complete_analysis(self) -> Dict[str, Any]:
-        """완전한 LDSC 분석 실행"""
+        """Run complete LDSC analysis"""
         logger.info("=" * 80)
         logger.info("🧬 LDSC Partitioned Heritability Analysis - STARTING")
         logger.info("=" * 80)
@@ -1510,28 +1510,28 @@ class LDSCPipeline:
         
         try:
             # Step 1: Validate reference files
-            logger.info("\n1️⃣ 단계: Reference files 검증")
+            logger.info("\n1️⃣ Step: Reference files validation")
             if not self.config.validate_reference_files():
                 raise RuntimeError("Reference file validation failed")
-            
+
             # Step 2: Create annotations
-            logger.info("\n2️⃣ 단계: Enhancer annotations 생성")
+            logger.info("\n2️⃣ Step: Enhancer annotations generation")
             annotation_files = self.annotation_generator.create_enhancer_annotations()
             if not annotation_files:
                 raise RuntimeError("No annotations created")
-            
+
             # Step 3: Prepare summary statistics
-            logger.info("\n3️⃣ 단계: GWAS summary statistics 준비")
+            logger.info("\n3️⃣ Step: GWAS summary statistics preparation")
             sumstats_file = self.sumstats_processor.prepare_gwas_sumstats()
-            
+
             # Step 4: Run LDSC analysis
-            logger.info("\n4️⃣ 단계: LDSC partitioned heritability 분석")
+            logger.info("\n4️⃣ Step: LDSC partitioned heritability analysis")
             ldsc_results = self.ldsc_analyzer.run_partitioned_heritability(
                 annotation_files, sumstats_file
             )
-            
+
             # Step 5: Aggregate results
-            logger.info("\n5️⃣ 단계: 결과 집계 및 보고서 생성")
+            logger.info("\n5️⃣ Step: Results aggregation and report generation")
             results_df = self.results_aggregator.aggregate_results(ldsc_results)
             report_file = self.results_aggregator.create_summary_report(results_df)
             
@@ -1570,46 +1570,46 @@ class LDSCPipeline:
             }
 
 def main():
-    """메인 실행 함수 - 단계별 실행 지원"""
+    """Main execution function - supports step-by-step execution"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(
-        description="LDSC Partitioned Heritability Analysis - 단계별 실행 지원"
+        description="LDSC Partitioned Heritability Analysis - Step-by-step execution support"
     )
-    parser.add_argument('--step', type=str, 
+    parser.add_argument('--step', type=str,
                        choices=['all', 'step2', 'step3', 'step4', 'step5', 'annotations', 'sumstats', 'ldsc', 'results'],
-                       default='all', 
-                       help='실행할 특정 단계 (all=전체, step2=annotations, step3=sumstats, step4=ldsc, step5=results)')
+                       default='all',
+                       help='Specific step to run (all=complete, step2=annotations, step3=sumstats, step4=ldsc, step5=results)')
     parser.add_argument('--force-rerun', action='store_true',
-                       help='기존 결과가 있어도 강제로 다시 실행')
+                       help='Force re-run even if existing results exist')
     
     args = parser.parse_args()
     
     try:
         pipeline = LDSCPipeline()
-        
+
         if args.step in ['all']:
-            logger.info("전체 LDSC 분석 실행")
+            logger.info("Running complete LDSC analysis")
             results = pipeline.run_complete_analysis()
             return 0 if results['success'] else 1
-            
+
         elif args.step in ['step2', 'annotations']:
-            logger.info("Step 2: LDSC Annotations 생성")
+            logger.info("Step 2: LDSC Annotations Generation")
             results = pipeline.run_step2_annotations()
             return 0 if results['success'] else 1
-            
+
         elif args.step in ['step3', 'sumstats']:
-            logger.info("Step 3: GWAS Summary Statistics 처리")
+            logger.info("Step 3: GWAS Summary Statistics Processing")
             results = pipeline.run_step3_sumstats()
             return 0 if results['success'] else 1
-            
+
         elif args.step in ['step4', 'ldsc']:
-            logger.info("Step 4: LDSC Regression 분석")
+            logger.info("Step 4: LDSC Regression Analysis")
             results = pipeline.run_step4_ldsc()
             return 0 if results['success'] else 1
-            
+
         elif args.step in ['step5', 'results']:
-            logger.info("Step 5: 결과 집계 및 보고서 생성")
+            logger.info("Step 5: Results Aggregation and Report Generation")
             results = pipeline.run_step5_results()
             return 0 if results['success'] else 1
             

@@ -1,16 +1,16 @@
 # GWAS Data Directory
 
-이 폴더는 파킨슨병 GWAS summary statistics 파일을 저장합니다.
+This folder stores Parkinson's disease GWAS summary statistics files.
 
-## 파일 설명
+## File Description
 
-- `GCST009325.h.tsv.gz`: 파킨슨병 GWAS 요약통계 (Nalls et al. 2019)
+- `GCST009325.h.tsv.gz`: Parkinson's disease GWAS summary statistics (Nalls et al. 2019)
   - 17.4M SNPs
-  - 37,688 케이스 + 1.4M 컨트롤
-  - hg19 좌표계
+  - 37,688 cases + 1.4M controls
+  - hg19 coordinate system
 
-## 데이터 출처
+## Data Source
 
-- **연구**: Nalls et al. (2019) The Lancet Neurology
+- **Study**: Nalls et al. (2019) The Lancet Neurology
 - **DOI**: 10.1016/S1474-4422(19)30320-5
-- **다운로드**: GWAS Catalog (GCST009325)
+- **Download**: GWAS Catalog (GCST009325)
