@@ -1,3 +1,7 @@
+# HOMER Motif Analysis
+# Note: The same command works for both intersect and non-intersect analysis.
+#       Just change the input BED file accordingly.
+
 # Neg (Microglia)
 /gpfs/data01/cbenner/software/homer/bin/findMotifsGenome.pl \
 /scratch/prj/bcn_marzi_lab/ratlas/Bomin/merged_final/Neg_clean.bed \
